@@ -1,0 +1,21 @@
+{
+  "name": "@cue-h0/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@cue-h0/db": "workspace:*",
+    "@cue-h0/types": "workspace:*",
+    "@langchain/langgraph": "^1.0.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
