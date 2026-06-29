@@ -1,0 +1,101 @@
+flowchart TB
+  user["Founder / GTM / Engineer"]
+  browser["Browser\nCue landing + workspace UI"]
+  vercel["Vercel\nNext.js 15 app"]
+  clerk["Clerk\nAuth + protected /app"]
+
+  subgraph api["Next.js API layer"]
+    bootstrap["/api/bootstrap\nHome snapshot"]
+    chats["/api/chats\nNew agent run"]
+    messages["/api/chats/:threadId/messages\nFollow-up run"]
+    approvalsApi["/api/approvals/:approvalId\nApprove / reject"]
+  end
+
+  subgraph agent["Cue AI Agent Loop\nOpenAI gpt-5-mini + LangGraph-style orchestration"]
+    intent["1. AI intent parser\nsearch / analyze / create / act"]
+    plan["2. AI planner + re-planner\nvisible steps: queued -> running -> done"]
+    router["3. AI tool router\nchoose Slack, Linear, GitHub, Notion, PostHog, Vercel, Exa"]
+    codeMode["4. Programmatic extraction\npaginate, filter, dedupe, rank large source results"]
+    evidence["5. Evidence evaluator\nfreshness, confidence, citation coverage"]
+    synth["6. AI synthesizer\nroot cause, impact, owner, recommendation"]
+    actionDraft["7. AI action drafter\nSlack ping, GTM copy, follow-up payload"]
+    stopCheck["8. AI goal check\nis the user's deliverable complete? loop or finish"]
+  end
+
+  openai["OpenAI Responses API\ngpt-5-mini"]
+  subgraph gate["Approval Boundary"]
+    preview["AI-generated preview card\nexact target + body + reason"]
+    human["Human approval\nApprove / edit / cancel"]
+    executor["Deterministic executor\nposts only after approval"]
+  end
+
+  subgraph aurora["AWS RDS for PostgreSQL\nsystem of record + evidence graph"]
+    accounts["connector_accounts"]
+    citations["citations\nsource receipts"]
+    tickets["tickets\nH0-19, H0-22, MKT-7"]
+    memory["memory_records\ndecisions + context"]
+    checks["launch_checks\nship / block status"]
+    events["activity_events\nhome feed"]
+    runs["workflow_runs\nplan + trace"]
+    approvalRows["approvals\naction payload + status"]
+    chatRows["chat_threads + chat_messages\nstructured answers"]
+  end
+
+  subgraph internal["Internal workspace tools"]
+    slack["Slack #launch\nsymptoms + approved updates"]
+    linear["Linear\nowners + issue status"]
+    github["GitHub\nPR #482 + code path"]
+    notion["Notion\nlaunch checklist + onboarding spec"]
+    posthog["PostHog\n82% -> 41% conversion"]
+    release["Vercel deploy timeline\ncue-web-prod-9f31"]
+  end
+
+  subgraph external["External signal providers"]
+    exa["Exa Search API\nlive public web context"]
+  end
+
+  user --> browser --> vercel --> clerk --> api
+  bootstrap --> aurora
+  chats --> intent
+  messages --> intent
+
+  openai -. drives .-> intent
+  openai -. drives .-> plan
+  openai -. drives .-> router
+  openai -. drives .-> evidence
+  openai -. drives .-> synth
+  openai -. drives .-> actionDraft
+  openai -. drives .-> stopCheck
+  intent --> plan --> router --> codeMode --> evidence --> synth --> actionDraft --> stopCheck
+  stopCheck -. re-plan if evidence is missing .-> plan
+  stopCheck --> preview --> human --> approvalsApi --> executor
+
+  router --> internal
+  router --> external
+  codeMode --> aurora
+  evidence --> citations
+  synth --> chatRows
+  actionDraft --> approvalRows
+  plan --> runs
+  router --> runs
+
+  internal --> aurora
+  external --> citations
+  executor --> slack
+  approvalsApi --> approvalRows
+  aurora --> bootstrap
+  aurora --> chats
+
+  classDef user fill:#fff8ed,stroke:#f59f3d,stroke-width:2px,color:#1f2937
+  classDef compute fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#1f2937
+  classDef ai fill:#f5f3ff,stroke:#8b5cf6,stroke-width:2.5px,color:#1f2937
+  classDef db fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#064e3b
+  classDef source fill:#f8fafc,stroke:#64748b,stroke-width:1.5px,color:#1f2937
+  classDef action fill:#fff1f2,stroke:#f43f5e,stroke-width:2px,color:#1f2937
+
+  class user,browser user
+  class vercel,clerk,api,bootstrap,chats,messages,approvalsApi compute
+  class agent,intent,plan,router,codeMode,evidence,synth,actionDraft,stopCheck,openai ai
+  class aurora,accounts,citations,tickets,memory,checks,events,runs,approvalRows,chatRows db
+  class internal,slack,linear,github,notion,posthog,release,external,exa source
+  class gate,preview,human,executor action

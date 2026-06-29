@@ -1,0 +1,203 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1350" viewBox="0 0 2000 1350" role="img" aria-labelledby="title desc">
+  <title id="title">Cue Architecture</title>
+  <desc id="desc">Architecture diagram for Cue showing the AI agent loop, tool routing, PostgreSQL evidence graph, connected workspace sources, Exa, and approval-gated side effects.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fbfaf7; }
+      .title { font-family: Arial, Helvetica, sans-serif; font-size: 42px; font-weight: 800; fill: #14161a; }
+      .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 500; fill: #667085; }
+      .section { font-family: Arial, Helvetica, sans-serif; font-size: 20px; font-weight: 800; fill: #1f2937; letter-spacing: .4px; }
+      .label { font-family: Arial, Helvetica, sans-serif; font-size: 18px; font-weight: 800; fill: #1f2937; }
+      .small { font-family: Arial, Helvetica, sans-serif; font-size: 15px; font-weight: 500; fill: #667085; }
+      .tiny { font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 500; fill: #667085; }
+      .box { fill: #ffffff; stroke: #e7e1d8; stroke-width: 2; rx: 18; }
+      .user { fill: #fff7ed; stroke: #f59f3d; }
+      .compute { fill: #eff6ff; stroke: #3b82f6; }
+      .ai { fill: #f5f3ff; stroke: #8b5cf6; stroke-width: 2.5; }
+      .db { fill: #ecfdf5; stroke: #10b981; }
+      .source { fill: #f8fafc; stroke: #94a3b8; }
+      .action { fill: #fff1f2; stroke: #f43f5e; }
+      .dark { fill: #15171a; stroke: #15171a; }
+      .darkText { font-family: Arial, Helvetica, sans-serif; font-size: 17px; font-weight: 800; fill: #ffffff; }
+      .mutedLine { stroke: #e7e1d8; stroke-width: 2; }
+      .arrow { stroke: #475467; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .aiArrow { stroke: #8b5cf6; stroke-width: 3; fill: none; marker-end: url(#aiArrow); }
+      .sourceArrow { stroke: #64748b; stroke-width: 2.5; fill: none; marker-end: url(#sourceArrow); stroke-dasharray: 8 7; }
+      .actionArrow { stroke: #f43f5e; stroke-width: 3; fill: none; marker-end: url(#actionArrow); }
+      .pill { fill: #15171a; rx: 999; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475467" />
+    </marker>
+    <marker id="aiArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b5cf6" />
+    </marker>
+    <marker id="sourceArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+    </marker>
+    <marker id="actionArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f43f5e" />
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#101828" flood-opacity=".10"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" width="2000" height="1350"/>
+  <text x="70" y="78" class="title">Cue Architecture: AI Agent Loop + Evidence Graph + Approval Gate</text>
+  <text x="72" y="114" class="subtitle">Plan, route tools, extract evidence, synthesize with citations, draft actions, then wait for human approval before writes.</text>
+
+  <rect x="70" y="155" width="360" height="155" class="box user" filter="url(#shadow)"/>
+  <text x="100" y="195" class="section">User Surface</text>
+  <text x="100" y="232" class="label">Founder / GTM / Engineer</text>
+  <text x="100" y="260" class="small">Asks plain-English work questions.</text>
+  <text x="100" y="284" class="small">Sees plan, trace, answer, citations, actions.</text>
+
+  <rect x="505" y="155" width="430" height="155" class="box compute" filter="url(#shadow)"/>
+  <text x="535" y="195" class="section">Vercel App Layer</text>
+  <text x="535" y="232" class="label">Next.js 15 on Vercel</text>
+  <text x="535" y="260" class="small">Landing page, protected workspace UI, API routes.</text>
+  <text x="535" y="284" class="small">Clerk handles auth for the /app experience.</text>
+
+  <rect x="1010" y="155" width="440" height="155" class="box compute" filter="url(#shadow)"/>
+  <text x="1040" y="195" class="section">API Routes</text>
+  <text x="1040" y="228" class="label">/api/bootstrap, /api/chats</text>
+  <text x="1040" y="254" class="label">/api/approvals</text>
+  <text x="1040" y="280" class="small">Starts agent runs, persists output, gates writes.</text>
+
+  <rect x="70" y="390" width="1880" height="440" class="box ai" filter="url(#shadow)"/>
+  <text x="100" y="430" class="section">Cue AI Agent Loop</text>
+  <text x="100" y="460" class="small">OpenAI Responses API with gpt-5-mini drives planning, tool routing, evidence synthesis, and action drafting.</text>
+
+  <rect x="105" y="500" width="220" height="106" class="box ai"/>
+  <text x="130" y="535" class="label">1. AI intent parser</text>
+  <text x="130" y="563" class="small">Classify search, analyze,</text>
+  <text x="130" y="586" class="small">create, or act request.</text>
+
+  <rect x="365" y="500" width="235" height="106" class="box ai"/>
+  <text x="390" y="535" class="label">2. AI planner</text>
+  <text x="390" y="563" class="small">Visible plan steps.</text>
+  <text x="390" y="586" class="small">Re-plans as evidence changes.</text>
+
+  <rect x="640" y="500" width="250" height="106" class="box ai"/>
+  <text x="665" y="535" class="label">3. AI tool router</text>
+  <text x="665" y="563" class="small">Chooses connectors and</text>
+  <text x="665" y="586" class="small">groups retrieval trace.</text>
+
+  <rect x="930" y="500" width="275" height="106" class="box ai"/>
+  <text x="955" y="535" class="label">4. Code-mode extraction</text>
+  <text x="955" y="563" class="small">Paginate, filter, dedupe,</text>
+  <text x="955" y="586" class="small">rank large source results.</text>
+
+  <rect x="1245" y="500" width="245" height="106" class="box ai"/>
+  <text x="1270" y="535" class="label">5. Evidence evaluator</text>
+  <text x="1270" y="563" class="small">Checks freshness, source</text>
+  <text x="1270" y="586" class="small">confidence, citation coverage.</text>
+
+  <rect x="1530" y="500" width="365" height="106" class="box ai"/>
+  <text x="1555" y="535" class="label">6. AI synthesizer</text>
+  <text x="1555" y="563" class="small">Root cause, owner, impact, recommendation.</text>
+  <text x="1555" y="586" class="small">Answers only from retrieved evidence.</text>
+
+  <rect x="365" y="675" width="310" height="106" class="box ai"/>
+  <text x="390" y="710" class="label">7. AI action drafter</text>
+  <text x="390" y="738" class="small">Creates Slack ping, GTM copy,</text>
+  <text x="390" y="761" class="small">or follow-up payload preview.</text>
+
+  <rect x="730" y="675" width="315" height="106" class="box ai"/>
+  <text x="755" y="710" class="label">8. AI goal check</text>
+  <text x="755" y="738" class="small">Did Cue deliver the output,</text>
+  <text x="755" y="761" class="small">or should it loop and re-plan?</text>
+
+  <rect x="1110" y="675" width="360" height="106" class="box ai"/>
+  <text x="1135" y="710" class="label">OpenAI gpt-5-mini</text>
+  <text x="1135" y="738" class="small">Model reasoning for plan, synthesis,</text>
+  <text x="1135" y="761" class="small">source comparison, and draft wording.</text>
+
+  <rect x="1530" y="675" width="365" height="106" class="box ai"/>
+  <text x="1555" y="710" class="label">Grounding guardrails</text>
+  <text x="1555" y="738" class="small">Structured output uses retrieved</text>
+  <text x="1555" y="761" class="small">citations, owners, and metrics only.</text>
+
+  <rect x="70" y="895" width="610" height="330" class="box db" filter="url(#shadow)"/>
+  <text x="100" y="935" class="section">AWS RDS for PostgreSQL</text>
+  <text x="100" y="964" class="small">System of record for workspace state, memory, citations, and workflow runs.</text>
+  <rect x="105" y="995" width="160" height="56" class="box db"/>
+  <text x="126" y="1029" class="tiny">connector_accounts</text>
+  <rect x="285" y="995" width="160" height="56" class="box db"/>
+  <text x="328" y="1029" class="tiny">citations</text>
+  <rect x="465" y="995" width="160" height="56" class="box db"/>
+  <text x="515" y="1029" class="tiny">tickets</text>
+  <rect x="105" y="1070" width="160" height="56" class="box db"/>
+  <text x="126" y="1104" class="tiny">memory_records</text>
+  <rect x="285" y="1070" width="160" height="56" class="box db"/>
+  <text x="322" y="1104" class="tiny">launch_checks</text>
+  <rect x="465" y="1070" width="160" height="56" class="box db"/>
+  <text x="498" y="1104" class="tiny">activity_events</text>
+  <rect x="105" y="1145" width="160" height="56" class="box db"/>
+  <text x="128" y="1179" class="tiny">workflow_runs</text>
+  <rect x="285" y="1145" width="160" height="56" class="box db"/>
+  <text x="330" y="1179" class="tiny">approvals</text>
+  <rect x="465" y="1145" width="160" height="56" class="box db"/>
+  <text x="486" y="1179" class="tiny">chat_messages</text>
+
+  <rect x="740" y="895" width="590" height="330" class="box source" filter="url(#shadow)"/>
+  <text x="770" y="935" class="section">Workspace Sources</text>
+  <text x="770" y="964" class="small">Internal truth that Cue indexes, cites, and cross-checks.</text>
+  <rect x="775" y="995" width="160" height="56" class="box source"/>
+  <text x="826" y="1029" class="tiny">Slack</text>
+  <rect x="955" y="995" width="160" height="56" class="box source"/>
+  <text x="1005" y="1029" class="tiny">Linear</text>
+  <rect x="1135" y="995" width="160" height="56" class="box source"/>
+  <text x="1187" y="1029" class="tiny">GitHub</text>
+  <rect x="775" y="1070" width="160" height="56" class="box source"/>
+  <text x="827" y="1104" class="tiny">Notion</text>
+  <rect x="955" y="1070" width="160" height="56" class="box source"/>
+  <text x="1005" y="1104" class="tiny">PostHog</text>
+  <rect x="1135" y="1070" width="160" height="56" class="box source"/>
+  <text x="1187" y="1104" class="tiny">Vercel</text>
+  <text x="775" y="1162" class="small">Connected evidence: H0-19, H0-22, MKT-7, PR #482,</text>
+  <text x="775" y="1186" class="small">Aurora migration, invite conversion drop, deploy timing.</text>
+
+  <rect x="1390" y="895" width="560" height="330" class="box source" filter="url(#shadow)"/>
+  <text x="1420" y="935" class="section">External Signals</text>
+  <text x="1420" y="964" class="small">Separate from internal workspace truth; used as market/customer context.</text>
+  <rect x="1425" y="995" width="220" height="78" class="box source"/>
+  <text x="1450" y="1028" class="label">Exa Search API</text>
+  <text x="1450" y="1055" class="tiny">Live public web context.</text>
+  <rect x="1685" y="995" width="220" height="78" class="box source"/>
+  <text x="1710" y="1028" class="label">Result highlights</text>
+  <text x="1710" y="1055" class="tiny">Titles, URLs, and cited excerpts.</text>
+  <rect x="1425" y="1110" width="480" height="78" class="box source"/>
+  <text x="1450" y="1143" class="label">Cited as External signals</text>
+  <text x="1450" y="1170" class="tiny">Shown separately in the retrieval trace to preserve the source boundary.</text>
+
+  <rect x="70" y="1250" width="1880" height="64" class="box action"/>
+  <text x="100" y="1288" class="section">Approval Boundary: AI drafts the action, but the deterministic executor writes only after the user clicks approve.</text>
+
+  <path class="arrow" d="M430 232 C465 232 470 232 505 232"/>
+  <path class="arrow" d="M935 232 C970 232 975 232 1010 232"/>
+  <path class="aiArrow" d="M1230 310 C1230 348 1230 355 1230 390"/>
+  <path class="aiArrow" d="M325 553 C345 553 345 553 365 553"/>
+  <path class="aiArrow" d="M600 553 C620 553 620 553 640 553"/>
+  <path class="aiArrow" d="M890 553 C910 553 910 553 930 553"/>
+  <path class="aiArrow" d="M1205 553 C1225 553 1225 553 1245 553"/>
+  <path class="aiArrow" d="M1490 553 C1510 553 1510 553 1530 553"/>
+  <path class="aiArrow" d="M1713 606 C1713 650 1540 665 1470 706"/>
+  <path class="aiArrow" d="M1470 728 C1520 810 930 835 888 781"/>
+  <path class="aiArrow" d="M730 728 C705 728 700 728 675 728"/>
+  <path class="aiArrow" d="M520 675 C520 640 520 640 520 606"/>
+  <path class="aiArrow" d="M1290 675 C1250 635 1190 610 1070 606"/>
+  <path class="sourceArrow" d="M765 606 C765 760 1015 795 1035 895"/>
+  <path class="sourceArrow" d="M1030 606 C990 760 505 815 410 895"/>
+  <path class="sourceArrow" d="M1370 606 C1500 760 1670 805 1670 895"/>
+  <path class="arrow" d="M375 895 C375 855 510 820 600 781"/>
+  <path class="arrow" d="M1720 895 C1720 845 1600 815 1470 781"/>
+  <path class="actionArrow" d="M520 781 C520 990 640 1170 890 1250"/>
+  <path class="actionArrow" d="M1045 781 C1120 940 1320 1135 1510 1250"/>
+  <path class="actionArrow" d="M1510 1282 C1610 1282 1710 1240 1795 1073"/>
+  <path class="arrow" d="M375 1225 C375 1240 375 1243 375 1250"/>
+
+  <rect x="70" y="1328" width="1880" height="1" class="mutedLine"/>
+  <text x="72" y="1343" class="tiny">Devpost proof points: published Vercel link, Vercel Team ID, AWS RDS screenshot, and this architecture diagram.</text>
+</svg>
