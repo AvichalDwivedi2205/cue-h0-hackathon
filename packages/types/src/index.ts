@@ -5,8 +5,15 @@ export type WorkspaceSource =
   | "linear"
   | "notion"
   | "vercel"
+  | "exa"
   | "meet"
-  | "posthog";
+  | "posthog"
+  | "sentry"
+  | "atlassian"
+  | "figma"
+  | "miro"
+  | "google-workspace"
+  | "gitbook";
 
 export type LaunchReadinessStatus = "ready" | "at_risk" | "blocked" | "insufficient_evidence";
 
@@ -22,6 +29,10 @@ export interface ConnectorAccountSummary {
   source: WorkspaceSource;
   label: string;
   status: "connected" | "needs_attention" | "disabled";
+  description?: string;
+  integrationMode?: "hosted_mcp" | "cue_adapter";
+  maturity?: "stable" | "beta" | "preview";
+  statusDetail?: string;
 }
 
 export interface SourceCitation {
@@ -170,6 +181,38 @@ export interface SuggestedAction {
   approvalId?: string;
 }
 
+export interface PlanStep {
+  id: string;
+  title: string;
+  status: "queued" | "running" | "done" | "blocked";
+  source?: WorkspaceSource;
+}
+
+export interface RetrievalTraceStep {
+  source: WorkspaceSource;
+  section: "Workspace evidence" | "Release timeline" | "External signals" | "Synthesis";
+  detail: string;
+  status: "queued" | "running" | "done" | "blocked";
+  resultCount: string;
+  citationIds: string[];
+}
+
+export interface ExternalSignal {
+  source: "exa";
+  title: string;
+  url: string;
+  excerpt: string;
+  publishedAt?: string;
+  citationId: string;
+}
+
+export interface ModelSynthesisResult {
+  mode: "openai" | "fallback";
+  model: string;
+  summary: string;
+  draft?: string;
+}
+
 export interface CueStructuredAnswer {
   role: "assistant";
   kind: "structured";
@@ -186,6 +229,10 @@ export interface CueStructuredAnswer {
   evidence: EvidenceChip[];
   citations: SourceCitation[];
   actions: SuggestedAction[];
+  planSteps?: PlanStep[];
+  retrievalTrace?: RetrievalTraceStep[];
+  externalSignals?: ExternalSignal[];
+  modelSynthesis?: ModelSynthesisResult;
 }
 
 export interface CueTextAnswer {
@@ -196,6 +243,10 @@ export interface CueTextAnswer {
   evidence: EvidenceChip[];
   citations: SourceCitation[];
   actions: SuggestedAction[];
+  planSteps?: PlanStep[];
+  retrievalTrace?: RetrievalTraceStep[];
+  externalSignals?: ExternalSignal[];
+  modelSynthesis?: ModelSynthesisResult;
 }
 
 export type CueAssistantMessage = CueStructuredAnswer | CueTextAnswer;

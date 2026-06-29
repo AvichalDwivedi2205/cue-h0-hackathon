@@ -48,7 +48,7 @@ export async function runLaunchReadinessWorkflow(
     .addNode("buildPlan", async () => ({
       runId: workflowRun.id,
       plan: [
-        { id: "step_collect", title: "Collect Slack, GitHub, Linear, Vercel, and memory evidence", status: "completed" as const },
+        { id: "step_collect", title: "Collect Slack, GitHub, Linear, Notion, PostHog, Vercel, Exa, and memory evidence", status: "completed" as const },
         { id: "step_check", title: "Evaluate launch checks and missing evidence", status: "in_progress" as const },
         { id: "step_actions", title: "Draft approval-gated actions", status: "pending" as const },
       ],
@@ -72,30 +72,27 @@ export async function runLaunchReadinessWorkflow(
       const citations = state.context.citations.filter((citation) => citationIds.has(citation.id));
       const evidenceGaps = state.context.citations.some((citation) => citation.source === "posthog")
         ? []
-        : ["PostHog launch analytics are not connected in this demo workspace."];
+        : ["PostHog launch analytics are currently unavailable."];
       return { findings, citations, evidenceGaps };
     })
     .addNode("draftActions", async (state) => {
       const actions: SuggestedAction[] = [
-        { id: "action_create_migration_ticket", label: "Create ticket for migration", requiresApproval: true },
-        { id: "action_draft_launch_update", label: "Draft launch update", requiresApproval: true },
-        { id: "action_assign_deploy_owner", label: "Assign deploy to Dana", requiresApproval: true },
+        { id: "action_create_verification_ticket", label: "Create H0-22 verification follow-up", requiresApproval: true },
+        { id: "action_draft_launch_update", label: "Draft H0 invite blocker update", requiresApproval: true },
+        { id: "action_assign_copy_owner", label: "Assign invite copy to Priya", requiresApproval: true },
       ];
       const approvals = await Promise.all(
-        actions.map((action) =>
-          dependencies.repository.createApproval({
+        actions.map((action) => {
+          const approvalDraft = buildApprovalDraft(action.label, state.query);
+          return dependencies.repository.createApproval({
             workspaceId: state.workspaceId,
             workflowRunId: workflowRun.id,
             title: `Approve: ${action.label}`,
-            description: buildApprovalDescription(action.label),
-            actionType: action.label.includes("ticket")
-              ? "linear_ticket"
-              : action.label.includes("deploy")
-                ? "deployment_note"
-                : "slack_update",
-            payload: { query: state.query, action: action.label },
-          }),
-        ),
+            description: approvalDraft.description,
+            actionType: approvalDraft.actionType,
+            payload: approvalDraft.payload,
+          });
+        }),
       );
       return {
         actions: actions.map((action, index) => ({
@@ -142,14 +139,43 @@ export async function runLaunchReadinessWorkflow(
   };
 }
 
-function buildApprovalDescription(actionLabel: string): string {
+function buildApprovalDraft(
+  actionLabel: string,
+  query: string,
+): {
+  description: string;
+  actionType: "linear_ticket" | "slack_update" | "deployment_note";
+  payload: Record<string, unknown>;
+} {
   if (actionLabel.includes("ticket")) {
-    return "Cue will create a Linear ticket for the migration verification blocker after approval.";
+    return {
+      description: "Cue will create a Linear verification follow-up for the invite acceptance blocker after approval.",
+      actionType: "linear_ticket",
+      payload: {
+        query,
+        title: "Verify Aurora invite acceptance migration path",
+        description:
+          "Run staging verification for invite acceptance, confirm stale workspaceSlug lookup is removed, and prove beta invites join by workspaceId.",
+      },
+    };
   }
-  if (actionLabel.includes("deploy")) {
-    return "Cue will record Dana as the production deploy owner after approval.";
+  if (actionLabel.includes("Priya") || actionLabel.includes("copy")) {
+    return {
+      description: "Cue will record Priya as owner for invite/setup launch copy after approval.",
+      actionType: "deployment_note",
+      payload: { query, note: "Priya owns launch copy clarifying team invite setup before Cue H0 launch." },
+    };
   }
-  return "Cue will draft a #launch update after approval. Nothing posts without your confirmation.";
+  return {
+    description: "Cue will post a #launch update after approval when Slack credentials are configured.",
+    actionType: "slack_update",
+    payload: {
+      query,
+      channel: process.env.SLACK_LAUNCH_CHANNEL_ID,
+      draft:
+        "H0 is blocked until beta invite acceptance is verified. Evidence points to stale workspaceSlug lookup after Aurora migration; PR #482 switches acceptance to workspaceId and PostHog shows beta conversion dropped from 82% to 41%.",
+    },
+  };
 }
 
 function buildFormattedReport(status: LaunchReadinessReport["status"], findings: AnswerBlock[], evidenceGaps: string[]): string {

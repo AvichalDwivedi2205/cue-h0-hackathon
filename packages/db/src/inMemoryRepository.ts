@@ -7,6 +7,7 @@ import type {
   WorkflowRunRecord,
 } from "@cue-h0/types";
 import { createDemoSeedData, demoWorkspaceSlug } from "./demoData.js";
+import { mergeConnectorSummaries } from "./connectorCatalog.js";
 import { createId, nowIsoString } from "./ids.js";
 import type {
   AppendChatExchangeInput,
@@ -36,7 +37,7 @@ export class InMemoryCueRepository implements CueRepository {
 
     return {
       workspace,
-      connectors: this.seedData.connectors,
+      connectors: mergeConnectorSummaries(this.seedData.connectors),
       meetings: [...this.seedData.meetings].sort((left, right) => left.startsAt.localeCompare(right.startsAt)),
       dueTasks: this.seedData.tasks.filter((task) => task.status !== "done"),
       ticketsNeedingAttention: this.seedData.tickets.filter((ticket) => ticket.priority === "high" && ticket.status !== "done"),
