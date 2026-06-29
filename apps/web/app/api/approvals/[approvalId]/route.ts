@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { executeApprovedAction } from "@cue-h0/runtime";
 import { getReadyCueRepository } from "@/lib/server";
 
 export const runtime = "nodejs";
@@ -16,5 +17,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ appro
     return NextResponse.json({ error: "approval not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ approval });
+  const execution = body.status === "approved" ? await executeApprovedAction(approval) : undefined;
+  return NextResponse.json({ approval, execution });
 }

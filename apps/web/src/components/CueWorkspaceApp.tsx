@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useClerk, useUser } from "@clerk/nextjs";
 import {
   AlertTriangle,
   ArrowUp,
@@ -33,13 +34,16 @@ import type {
   CueAssistantMessage,
   EvidenceChip,
   HomeSnapshot,
+  ModelSynthesisResult,
+  PlanStep,
+  RetrievalTraceStep,
   SuggestedAction,
   WorkspaceSource,
 } from "@cue-h0/types";
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
 
 .cue-app{
   --canvas:#F5F3ED; --surface:#FFFFFF; --surface-2:#FAF8F3; --inset:#F1EEE6;
@@ -88,6 +92,7 @@ html,body{margin:0;padding:0}
 .avatar-wrap{position:relative}
 .avatar{width:32px;height:32px;border-radius:999px;background:linear-gradient(135deg,#3A4150,#1B1D23);color:#fff;
   border:none;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;cursor:pointer}
+.avatar img{width:100%;height:100%;border-radius:inherit;object-fit:cover}
 .backdrop{position:fixed;inset:0;z-index:45}
 .menu{position:absolute;right:0;top:42px;width:248px;background:var(--surface);border:1px solid var(--line);
   border-radius:13px;box-shadow:var(--shadow-pop);z-index:50;overflow:hidden;animation:pop .16s ease both}
@@ -99,12 +104,15 @@ html,body{margin:0;padding:0}
 .conn-badge{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--ink-2);
   border:1px solid var(--line);border-radius:999px;padding:3px 8px}
 .conn-badge .dot{width:5px;height:5px;border-radius:999px;background:var(--ok)}
+.conn-badge.needs_attention .dot{background:var(--signal)}
+.conn-badge.disabled .dot{background:var(--ink-4)}
+.conn-state{color:var(--ink-3)}
 .menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 15px;background:none;border:none;
   border-top:1px solid var(--line-soft);font-family:var(--sans);font-size:13px;color:var(--ink-2);cursor:pointer;text-align:left;transition:background .15s}
 .menu-item:hover{background:var(--surface-2);color:var(--ink)}.menu-item svg{width:15px;height:15px;stroke-width:2}
 
-.main-body{flex:1;min-height:0;position:relative;display:flex;flex-direction:column}
-.scroll{flex:1;overflow-y:auto;scroll-behavior:smooth}
+.main-body{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;overflow:hidden}
+.scroll{flex:1;min-height:0;overflow-y:auto;scroll-behavior:smooth}
 .scroll::-webkit-scrollbar{width:10px}.scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:99px;border:3px solid var(--canvas)}
 
 .home{max-width:1040px;margin:0 auto;padding:38px 28px 60px}
@@ -149,7 +157,7 @@ html,body{margin:0;padding:0}
 .unread{width:7px;height:7px;border-radius:999px;background:var(--accent)}
 .mini-chip{font-family:var(--mono);font-size:9.5px;font-weight:500;padding:2px 7px;border-radius:999px;background:var(--signal-tint);color:var(--signal)}
 
-.src-slack{color:#6B4FA0}.src-github{color:#2E3138}.src-linear{color:#4B59C9}.src-notion{color:#3A3F4B}.src-vercel{color:#14171F}.src-meet{color:var(--signal)}.src-cue{color:var(--signal)}.src-posthog{color:var(--accent)}
+.src-slack{color:#6B4FA0}.src-github{color:#2E3138}.src-linear{color:#4B59C9}.src-notion{color:#3A3F4B}.src-vercel{color:#14171F}.src-meet{color:var(--signal)}.src-cue{color:var(--signal)}.src-posthog{color:var(--accent)}.src-exa{color:#0D8F7B}
 .cue-app.dark .src-github{color:#C9CDD6}.cue-app.dark .src-notion{color:#C9CDD6}.cue-app.dark .src-vercel{color:#ECEDF1}.cue-app.dark .src-slack{color:#B79CE6}.cue-app.dark .src-linear{color:#9AA0EE}
 
 .t-row{display:flex;align-items:center;gap:11px;padding:10px 16px;border-bottom:1px solid var(--line-soft)}
@@ -182,7 +190,7 @@ html,body{margin:0;padding:0}
 .ra-t{flex:1;font-size:12.5px;color:var(--ink);min-width:0}
 .ra-time{font-family:var(--mono);font-size:10px;color:var(--ink-4);flex-shrink:0}
 
-.chats{display:grid;grid-template-columns:248px 1fr;height:100%;min-width:0}
+.chats{display:grid;grid-template-columns:248px 1fr;height:100%;min-height:0;min-width:0;overflow:hidden}
 .threads{border-right:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;overflow:hidden}
 .threads-head{padding:14px 12px 10px}
 .new-btn{display:flex;align-items:center;gap:9px;width:100%;padding:9px 12px;border-radius:11px;border:1px solid var(--line);
@@ -196,8 +204,8 @@ html,body{margin:0;padding:0}
 .t-itxt{font-size:12.5px;color:var(--ink-2);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .t-item.active .t-itxt{color:var(--ink);font-weight:500}
 
-.convo-wrap{display:flex;flex-direction:column;min-width:0;height:100%;background:var(--canvas)}
-.convo{flex:1;overflow-y:auto;padding:28px 0 24px}
+.convo-wrap{display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden;background:var(--canvas)}
+.convo{flex:1;min-height:0;overflow-y:auto;padding:28px 0 24px;overscroll-behavior:contain}
 .convo-inner{max-width:720px;margin:0 auto;padding:0 26px;display:flex;flex-direction:column;gap:24px}
 .msg-in{animation:fadeUp .5s cubic-bezier(.2,.7,.2,1) both}
 .u-msg{align-self:flex-end;max-width:78%;background:var(--ink);color:var(--surface);padding:11px 15px;border-radius:16px 16px 5px 16px;font-size:14.5px;line-height:1.45}
@@ -211,7 +219,7 @@ html,body{margin:0;padding:0}
 .chip-status.warn{background:var(--signal-tint);color:var(--signal)}.chip-status.warn .light{background:var(--signal-bright)}
 .chip-status.ok{background:var(--ok-tint);color:var(--ok)}.chip-status.ok .light{background:var(--ok)}
 .live .light{animation:cuePulse 2.6s ease-out infinite}
-.answer-sub{margin-top:7px;color:var(--ink-2);font-size:14px;line-height:1.55}.answer-sub b{color:var(--ink);font-weight:500}
+.answer-sub{margin-top:7px;color:var(--ink-2);font-size:14px;line-height:1.55;white-space:pre-line}.answer-sub b{color:var(--ink);font-weight:500}
 .blocks{margin-top:16px;display:flex;flex-direction:column;gap:9px}
 .block{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px 14px;display:flex;gap:11px}
 .block-ico{width:15px;height:15px;color:var(--stop);flex-shrink:0;margin-top:1px;stroke-width:2}
@@ -226,12 +234,37 @@ html,body{margin:0;padding:0}
 .act{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 13px;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink);cursor:pointer;transition:transform .15s,border-color .15s}
 .act:hover{transform:translateY(-1px);border-color:var(--signal-bright)}.act svg{width:13px;height:13px;color:var(--signal);stroke-width:2.2}
 .act.done{background:var(--ok-tint);border-color:var(--ok-tint);color:var(--ok)}.act.done svg{color:var(--ok)}
+.plan-card{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.plan-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line-soft);font-size:12.5px;font-weight:500}.plan-head svg{width:13px;height:13px;color:var(--signal);stroke-width:2.2}
+.plan-row{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line-soft);font-size:12px;color:var(--ink-2)}
+.plan-row:last-child{border-bottom:none}.plan-num{font-family:var(--mono);font-size:10px;color:var(--ink-3)}.plan-state{font-family:var(--mono);font-size:10px;color:var(--ok)}
+.plan-row.running{background:var(--signal-tint)}.plan-row.running .plan-state{color:var(--signal)}.plan-row.queued .plan-state{color:var(--ink-3)}.plan-row.done .plan-state{color:var(--ok)}
+.model-card{margin-top:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.model-top{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}.model-top svg{width:13px;height:13px;color:var(--accent);stroke-width:2.2}.model-pill{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:999px;padding:2px 7px}
+.draft-box{margin-top:10px;padding:10px 11px;border-radius:9px;background:var(--surface-2);font-size:12.5px;line-height:1.5;color:var(--ink-2);white-space:pre-line}
 .thinking{display:flex;align-items:center;gap:10px}
 .think-line{font-size:13.5px;background:linear-gradient(90deg,var(--ink-4) 25%,var(--ink-2) 50%,var(--ink-4) 75%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 1.6s linear infinite}
 @keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
 .tdots{display:flex;gap:4px}.tdot{width:5px;height:5px;border-radius:999px;background:var(--signal-bright);animation:tdot 1.1s ease-in-out infinite}
 .tdot:nth-child(2){animation-delay:.18s}.tdot:nth-child(3){animation-delay:.36s}
 @keyframes tdot{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+.trace{margin-top:13px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.trace-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line-soft)}
+.trace-title{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;color:var(--ink)}
+.trace-title svg{width:13px;height:13px;color:var(--signal);stroke-width:2.2}
+.trace-pill{font-family:var(--mono);font-size:9.5px;color:var(--ok);background:var(--ok-tint);border-radius:999px;padding:2px 7px;white-space:nowrap}
+.trace-list{display:flex;flex-direction:column}
+.trace-section{padding:8px 12px 5px;font-family:var(--mono);font-size:9.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--line-soft)}
+.trace-row{display:grid;grid-template-columns:24px 1fr auto;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line-soft);min-height:43px}
+.trace-row:last-child{border-bottom:none}
+.trace-ico{width:24px;height:24px;border-radius:7px;background:var(--inset);display:flex;align-items:center;justify-content:center;color:var(--ink-3)}
+.trace-ico svg{width:12px;height:12px;stroke-width:2}
+.trace-main{min-width:0}.trace-source{font-size:12px;font-weight:500;color:var(--ink);line-height:1.25}.trace-detail{margin-top:2px;font-family:var(--mono);font-size:10px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trace-state{font-family:var(--mono);font-size:10px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.trace-row.done .trace-state{color:var(--ok)}.trace-row.active .trace-state{color:var(--signal)}
+.trace-spinner{width:10px;height:10px;border-radius:999px;border:1.5px solid var(--signal-tint);border-top-color:var(--signal);animation:spin .75s linear infinite}
+.trace-check{width:10px;height:10px;border-radius:999px;background:var(--ok)}
+@keyframes spin{to{transform:rotate(360deg)}}
 .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;animation:fadeUp .5s ease both}
 .welcome-mark{width:46px;height:46px;border-radius:13px;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);margin-bottom:18px}
 .welcome h2{font-size:21px;font-weight:500;letter-spacing:-0.02em;margin:0}
@@ -290,18 +323,33 @@ interface ToastMessage {
   text: string;
 }
 
+interface ApprovalExecution {
+  status: "executed" | "skipped" | "failed";
+  message: string;
+  url?: string;
+}
+
 const sourceIcon: Record<WorkspaceSource, LucideIcon> = {
   slack: Hash,
   github: GitBranch,
   linear: Circle,
   notion: BookOpen,
   vercel: Rocket,
+  exa: Search,
   meet: CalendarClock,
   cue: Brain,
   posthog: Sparkles,
+  sentry: AlertTriangle,
+  atlassian: Circle,
+  figma: Sparkles,
+  miro: Brain,
+  "google-workspace": BookOpen,
+  gitbook: BookOpen,
 };
 
 export function CueWorkspaceApp() {
+  const { signOut } = useClerk();
+  const { user } = useUser();
   const [view, setView] = useState<"home" | "chats">("home");
   const [dark, setDark] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -309,6 +357,7 @@ export function CueWorkspaceApp() {
   const [threads, setThreads] = useState<ChatThreadWithMessages[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [thinkingId, setThinkingId] = useState<string | null>(null);
+  const [thinkingStartedAt, setThinkingStartedAt] = useState<number | null>(null);
   const [feedTab, setFeedTab] = useState<"Suggested" | "Recent" | "Mentions">("Suggested");
   const [draft, setDraft] = useState("");
   const [approval, setApproval] = useState<ApprovalDialog | null>(null);
@@ -323,6 +372,8 @@ export function CueWorkspaceApp() {
   const feedGroups = useMemo(() => buildFeedGroups(snapshot), [snapshot]);
   const dateLabel = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   const partOfDay = getPartOfDay();
+  const displayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? snapshot?.workspace.userDisplayName ?? "Avi";
+  const avatarInitials = initials(displayName);
 
   useEffect(() => {
     let cancelled = false;
@@ -413,19 +464,35 @@ export function CueWorkspaceApp() {
 
     setThreads((currentThreads) => [pendingThread, ...currentThreads]);
     setActiveId(pendingThreadId);
+    const startedAt = Date.now();
     setThinkingId(pendingThreadId);
+    setThinkingStartedAt(startedAt);
     setView("chats");
 
     try {
+      const replayThread = isDemoReplayEnabled() ? findDemoReplayThread(trimmedQuestion, threads) : undefined;
+      if (replayThread) {
+        await waitForMinimumTrace(startedAt);
+        setThreads((currentThreads) => [
+          replayThread,
+          ...currentThreads.filter((thread) => thread.id !== pendingThreadId && thread.id !== replayThread.id),
+        ]);
+        setActiveId(replayThread.id);
+        return;
+      }
+
       const result = await postJson<ChatMutationResponse>("/api/chats", { message: trimmedQuestion });
+      await waitForMinimumTrace(startedAt);
       setSnapshot(result.snapshot);
       setThreads(result.threads);
       setActiveId(result.thread.id);
     } catch (error) {
+      await waitForMinimumTrace(startedAt);
       toast(error instanceof Error ? error.message : "Cue could not answer that.");
       setThreads((currentThreads) => currentThreads.filter((thread) => thread.id !== pendingThreadId));
     } finally {
       setThinkingId(null);
+      setThinkingStartedAt(null);
     }
   }
 
@@ -454,19 +521,24 @@ export function CueWorkspaceApp() {
           : thread,
       ),
     );
+    const startedAt = Date.now();
     setThinkingId(active.id);
+    setThinkingStartedAt(startedAt);
 
     try {
       const result = await postJson<{ thread: ChatThreadWithMessages; snapshot: HomeSnapshot }>(
         `/api/chats/${active.id}/messages`,
         { message: trimmedQuestion },
       );
+      await waitForMinimumTrace(startedAt);
       setSnapshot(result.snapshot);
       setThreads((currentThreads) => currentThreads.map((thread) => (thread.id === result.thread.id ? result.thread : thread)));
     } catch (error) {
+      await waitForMinimumTrace(startedAt);
       toast(error instanceof Error ? error.message : "Cue could not answer that.");
     } finally {
       setThinkingId(null);
+      setThinkingStartedAt(null);
     }
   }
 
@@ -492,8 +564,10 @@ export function CueWorkspaceApp() {
       return;
     }
     try {
+      let execution: ApprovalExecution | undefined;
       if (approval.id) {
-        await patchJson(`/api/approvals/${approval.id}`, { status: "approved" });
+        const result = await patchJson<{ execution?: ApprovalExecution }>(`/api/approvals/${approval.id}`, { status: "approved" });
+        execution = result.execution;
         setSnapshot((currentSnapshot) =>
           currentSnapshot
             ? {
@@ -506,7 +580,7 @@ export function CueWorkspaceApp() {
       if (approval.action) {
         setDoneActions((currentDoneActions) => new Set(currentDoneActions).add(approval.action!.id));
       }
-      toast("Approved - Cue is on it");
+      toast(executionToast(execution));
     } catch (error) {
       toast(error instanceof Error ? error.message : "Approval failed.");
     } finally {
@@ -540,22 +614,27 @@ export function CueWorkspaceApp() {
         </button>
         <div className="avatar-wrap">
           <button className="avatar" onClick={() => setMenuOpen((currentOpen) => !currentOpen)}>
-            AV
+            {user?.imageUrl ? <img src={user.imageUrl} alt="" /> : avatarInitials}
           </button>
           {menuOpen && snapshot && (
             <>
               <div className="backdrop" onClick={() => setMenuOpen(false)} />
               <div className="menu">
                 <div className="menu-head">
-                  <div className="menu-name">{snapshot.workspace.userDisplayName} Varma</div>
+                  <div className="menu-name">{displayName}</div>
                   <div className="menu-ws">{snapshot.workspace.name}</div>
                 </div>
                 <div className="menu-lab eyebrow">Connectors</div>
                 <div className="menu-conns">
                   {snapshot.connectors.map((connector) => (
-                    <span className="conn-badge" key={connector.id}>
+                    <span
+                      className={`conn-badge ${connector.status}`}
+                      key={connector.id}
+                      title={connector.statusDetail ?? connector.description ?? connector.status}
+                    >
                       <span className="dot" />
                       {connector.label}
+                      {connector.status !== "connected" && <span className="conn-state">setup</span>}
                     </span>
                   ))}
                 </div>
@@ -571,9 +650,9 @@ export function CueWorkspaceApp() {
                 </button>
                 <button
                   className="menu-item"
-                  onClick={() => {
+                  onClick={async () => {
                     setMenuOpen(false);
-                    toast("Signed out");
+                    await signOut({ redirectUrl: "/sign-in" });
                   }}
                 >
                   <LogOut />
@@ -641,7 +720,7 @@ export function CueWorkspaceApp() {
       <div className="scroll">
         <div className="home">
           <div className="fade">
-            <h1 className="greeting">Good {partOfDay}, {snapshot.workspace.userDisplayName}</h1>
+            <h1 className="greeting">Good {partOfDay}, {firstName(displayName)}</h1>
             <p className="greet-sub">
               Search across your workspace, or ask Cue. <b>{snapshot.pendingApprovals.length + snapshot.dueTasks.length} things</b> need a look today.
             </p>
@@ -846,7 +925,11 @@ export function CueWorkspaceApp() {
               <h2>Ask Cue anything about your work</h2>
               <p>I search across Slack, GitHub, Linear, Notion, Vercel, and your meetings - and every answer comes with its sources.</p>
               <div className="sugg">
-                {["Are we ready to submit H0?", "What's blocking the Aurora migration?", "Summarize Priya's ask in #leadership"].map((suggestion) => (
+                {[
+                  "Production code is breaking. Find the issue, who owns it, impact, and draft a Slack ping.",
+                  "What should GTM say publicly about beta invite confusion before H0 launch?",
+                  "What changed in PR #482?",
+                ].map((suggestion) => (
                   <button className="sugg-chip" key={suggestion} onClick={() => void send(suggestion)}>
                     {suggestion}
                   </button>
@@ -865,7 +948,12 @@ export function CueWorkspaceApp() {
                     <CueMessage key={message.id} message={message} onAction={onAction} doneActions={doneActions} />
                   ),
                 )}
-                {thinkingId === active?.id && <Thinking />}
+                {thinkingId === active?.id && (
+                  <Thinking
+                    query={[...(active?.messages ?? [])].reverse().find((message) => message.role === "user")?.content ?? ""}
+                    startedAt={thinkingStartedAt ?? Date.now()}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -985,13 +1073,19 @@ function CueMessage({
               </div>
             </>
           )}
+          <PlanLayer steps={structuredMessage.planSteps ?? []} />
+          <RetrievalTraceLayer trace={structuredMessage.retrievalTrace ?? []} />
           <EvidenceLayer evidence={structuredMessage.evidence} />
+          <ModelSynthesisLayer synthesis={structuredMessage.modelSynthesis} />
           <ActionLayer actions={structuredMessage.actions} doneActions={doneActions} onAction={onAction} />
         </div>
       ) : (
         <div className={`c-body ${structuredMessage.tone || "signal"}`}>
           <div className="answer-sub" style={{ marginTop: 2 }}>{structuredMessage.text}</div>
+          <PlanLayer steps={structuredMessage.planSteps ?? []} />
+          <RetrievalTraceLayer trace={structuredMessage.retrievalTrace ?? []} />
           <EvidenceLayer evidence={structuredMessage.evidence} />
+          <ModelSynthesisLayer synthesis={structuredMessage.modelSynthesis} />
           <ActionLayer actions={structuredMessage.actions} doneActions={doneActions} onAction={onAction} />
         </div>
       )}
@@ -1006,6 +1100,121 @@ function StatusChip({ className, text, live }: { className: "warn" | "ok"; text:
       {text}
     </span>
   );
+}
+
+function PlanLayer({ steps }: { steps: PlanStep[] }) {
+  if (steps.length === 0) {
+    return null;
+  }
+  return (
+    <div className="plan-card">
+      <div className="plan-head">
+        <Brain />
+        Plan
+      </div>
+      {steps.map((step, index) => (
+        <div className={`plan-row ${step.status}`} key={step.id}>
+          <span className="plan-num">{index + 1}</span>
+          <span>{step.title}</span>
+          <span className="plan-state">{step.status}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RetrievalTraceLayer({ trace }: { trace: RetrievalTraceStep[] }) {
+  if (trace.length === 0) {
+    return null;
+  }
+  return (
+    <div className="trace" style={{ marginTop: 16 }}>
+      <div className="trace-head">
+        <div className="trace-title">
+          <Sparkles />
+          Retrieval trace
+        </div>
+        <span className="trace-pill">grounded</span>
+      </div>
+      <div className="trace-list">
+        {trace.map((step, index) => {
+          const Icon = sourceIcon[step.source] ?? Hash;
+          const showSection = index === 0 || trace[index - 1]?.section !== step.section;
+          return (
+            <React.Fragment key={`${step.source}-${step.detail}`}>
+              {showSection && <div className="trace-section">{step.section}</div>}
+              <div className={`trace-row ${step.status}`}>
+                <div className="trace-ico">
+                  <Icon className={`src-${step.source}`} />
+                </div>
+                <div className="trace-main">
+                  <div className="trace-source">{sourceLabel(step.source)}</div>
+                  <div className="trace-detail">{step.detail}</div>
+                </div>
+                <div className="trace-state">
+                  {step.status === "done" && <span className="trace-check" />}
+                  {step.resultCount}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ModelSynthesisLayer({ synthesis }: { synthesis?: ModelSynthesisResult }) {
+  if (!synthesis) {
+    return null;
+  }
+  const summary = renderModelText(synthesis.summary);
+  const draft = renderModelText(synthesis.draft);
+  return (
+    <div className="model-card">
+      <div className="model-top">
+        <Sparkles />
+        AI synthesis
+        <span className="model-pill">{synthesis.model}</span>
+      </div>
+      {summary && <div className="draft-box">{summary}</div>}
+      {draft && (
+        <div className="draft-box">
+          <b>Draft preview</b>
+          {"\n"}
+          {draft}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderModelText(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value.trim() || undefined;
+  }
+  if (Array.isArray(value)) {
+    return value.map(renderModelText).filter(Boolean).join("\n\n") || undefined;
+  }
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, entry]) => {
+        const text = renderModelText(entry);
+        return text ? `${humanizeObjectKey(key)}:\n${text}` : undefined;
+      })
+      .filter(Boolean)
+      .join("\n\n") || undefined;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
+function humanizeObjectKey(key: string): string {
+  return key
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function EvidenceLayer({ evidence }: { evidence: EvidenceChip[] }) {
@@ -1061,13 +1270,206 @@ function ActionLayer({
   );
 }
 
-function Thinking() {
-  const steps = ["Searching Slack #launch...", "Checking GitHub #482...", "Cross-referencing Linear...", "Grounding the answer..."];
-  const [index, setIndex] = useState(0);
+interface RetrievalStep {
+  source: WorkspaceSource;
+  section: "Workspace evidence" | "Release timeline" | "External signals";
+  label: string;
+  detail: string;
+  activeText: string;
+  doneText: string;
+  doneAt: number;
+}
+
+interface ThinkingPlanStep {
+  title: string;
+  doneAt: number;
+}
+
+type ThinkingPlanStatus = "queued" | "running" | "done";
+
+const PLAN_REVEAL_MS = 1_200;
+const RETRIEVAL_REVEAL_MS = 10_000;
+const MIN_AGENT_RUNTIME_MS = 60_000;
+
+const inviteThinkingPlanSteps: ThinkingPlanStep[] = [
+  {
+    title: "Understand the incident and define the decision that needs to be made",
+    doneAt: 6_000,
+  },
+  {
+    title: "Search connected workspace sources for symptoms and ownership",
+    doneAt: 23_000,
+  },
+  {
+    title: "Compare the implementation, product specification, and release timeline",
+    doneAt: 40_000,
+  },
+  {
+    title: "Measure user impact and determine whether the issue changes launch readiness",
+    doneAt: 52_000,
+  },
+  {
+    title: "Prepare a proposed team update for approval",
+    doneAt: 58_500,
+  },
+];
+
+const marketingThinkingPlanSteps: ThinkingPlanStep[] = [
+  {
+    title: "Clarify the public question and the decision GTM needs to make",
+    doneAt: 6_000,
+  },
+  {
+    title: "Search external context and connected workspace sources",
+    doneAt: 22_000,
+  },
+  {
+    title: "Compare public expectations with the documented product behavior",
+    doneAt: 43_000,
+  },
+  {
+    title: "Prepare recommended public language for approval",
+    doneAt: 58_500,
+  },
+];
+
+const inviteRetrievalSteps: RetrievalStep[] = [
+  {
+    source: "slack",
+    section: "Workspace evidence",
+    label: "Slack",
+    detail: "#launch · Sam reports empty workspace · Dana links Aurora migration",
+    activeText: "reading",
+    doneText: "4 msgs",
+    doneAt: 7_000,
+  },
+  {
+    source: "linear",
+    section: "Workspace evidence",
+    label: "Linear",
+    detail: "H0-19 owner Sam · H0-22 owner Dana · MKT-7 owner Priya",
+    activeText: "matching",
+    doneText: "3 issues",
+    doneAt: 13_000,
+  },
+  {
+    source: "github",
+    section: "Workspace evidence",
+    label: "GitHub",
+    detail: "PR #482 · acceptInvite.ts · workspaceSlug vs workspaceId",
+    activeText: "diffing",
+    doneText: "1 PR",
+    doneAt: 22_000,
+  },
+  {
+    source: "notion",
+    section: "Workspace evidence",
+    label: "Notion",
+    detail: "H0 checklist blocks ship · Beta spec says workspaceId is truth",
+    activeText: "opening",
+    doneText: "2 docs",
+    doneAt: 30_000,
+  },
+  {
+    source: "posthog",
+    section: "Workspace evidence",
+    label: "PostHog",
+    detail: "beta invite funnel · invite_accepted → workspace_joined",
+    activeText: "querying",
+    doneText: "82%→41%",
+    doneAt: 39_000,
+  },
+  {
+    source: "vercel",
+    section: "Release timeline",
+    label: "Vercel",
+    detail: "cue-web-prod-9f31 promoted before conversion drop",
+    activeText: "checking",
+    doneText: "prod",
+    doneAt: 45_000,
+  },
+  {
+    source: "exa",
+    section: "External signals",
+    label: "Exa",
+    detail: "optional web context · onboarding and invite setup friction",
+    activeText: "searching",
+    doneText: "web",
+    doneAt: 49_000,
+  },
+];
+
+const marketingRetrievalSteps: RetrievalStep[] = [
+  {
+    source: "exa",
+    section: "External signals",
+    label: "Exa",
+    detail: "live web search · onboarding and team invite setup",
+    activeText: "searching",
+    doneText: "web",
+    doneAt: 9_000,
+  },
+  {
+    source: "linear",
+    section: "Workspace evidence",
+    label: "Linear",
+    detail: "MKT-7 · Priya · Backlog",
+    activeText: "matching",
+    doneText: "1 issue",
+    doneAt: 18_000,
+  },
+  {
+    source: "notion",
+    section: "Workspace evidence",
+    label: "Notion",
+    detail: "Beta Onboarding Spec · source of truth is workspaceId",
+    activeText: "opening",
+    doneText: "1 doc",
+    doneAt: 29_000,
+  },
+  {
+    source: "slack",
+    section: "Workspace evidence",
+    label: "Slack",
+    detail: "#launch · Priya launch copy concern",
+    activeText: "reading",
+    doneText: "1 ask",
+    doneAt: 38_000,
+  },
+  {
+    source: "posthog",
+    section: "Workspace evidence",
+    label: "PostHog",
+    detail: "beta invite segment · conversion drop",
+    activeText: "checking",
+    doneText: "beta only",
+    doneAt: 49_000,
+  },
+];
+
+function Thinking({ query, startedAt }: { query: string; startedAt: number }) {
+  const isMarketing = isMarketingTrace(query);
+  const steps = useMemo(() => (isMarketing ? marketingRetrievalSteps : inviteRetrievalSteps), [isMarketing]);
+  const planSteps = useMemo(() => (isMarketing ? marketingThinkingPlanSteps : inviteThinkingPlanSteps), [isMarketing]);
+  const [elapsed, setElapsed] = useState(() => Date.now() - startedAt);
+
   useEffect(() => {
-    const timer = setInterval(() => setIndex((currentIndex) => (currentIndex + 1) % steps.length), 900);
+    const timer = setInterval(() => setElapsed(Date.now() - startedAt), 180);
     return () => clearInterval(timer);
-  }, [steps.length]);
+  }, [startedAt]);
+
+  const showPlan = elapsed >= PLAN_REVEAL_MS;
+  const showTrace = elapsed >= RETRIEVAL_REVEAL_MS;
+  const traceElapsed = Math.max(0, elapsed - RETRIEVAL_REVEAL_MS);
+  const retrievalCompleteAt = Math.max(...steps.map((step) => step.doneAt));
+  const retrievalDone = showTrace && traceElapsed >= retrievalCompleteAt;
+  const activeStep = showTrace && !retrievalDone ? steps.find((step) => traceElapsed < step.doneAt) : undefined;
+  const currentLine = getThinkingLine({
+    activeStep,
+    retrievalDone,
+    showPlan,
+    showTrace,
+  });
 
   return (
     <div className="c-msg msg-in">
@@ -1081,11 +1483,141 @@ function Thinking() {
             <span className="tdot" />
             <span className="tdot" />
           </div>
-          <span className="think-line">{steps[index]}</span>
+          <span className="think-line">{currentLine}</span>
         </div>
+        {showPlan && <ThinkingPlan steps={planSteps} elapsed={elapsed} />}
+        {showTrace && <ThinkingTrace steps={steps} elapsed={traceElapsed} activeStep={activeStep} complete={retrievalDone} />}
       </div>
     </div>
   );
+}
+
+function ThinkingPlan({ steps, elapsed }: { steps: ThinkingPlanStep[]; elapsed: number }) {
+  return (
+    <div className="plan-card">
+      <div className="plan-head">
+        <Brain />
+        Planning investigation
+      </div>
+      {steps.map((step, index) => {
+        const status = getPlanStatus(steps, step, index, elapsed);
+        return (
+          <div className={`plan-row ${status}`} key={step.title}>
+            <span className="plan-num">{index + 1}</span>
+            <span>{step.title}</span>
+            <span className="plan-state">{status}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ThinkingTrace({
+  steps,
+  elapsed,
+  activeStep,
+  complete,
+}: {
+  steps: RetrievalStep[];
+  elapsed: number;
+  activeStep?: RetrievalStep;
+  complete: boolean;
+}) {
+  return (
+    <div className="trace">
+      <div className="trace-head">
+        <div className="trace-title">
+          <Sparkles />
+          Workspace retrieval
+        </div>
+        <span className="trace-pill">{complete ? "sources ready" : "running"}</span>
+      </div>
+      <div className="trace-list">
+        {steps.map((step, stepIndex) => {
+          const Icon = sourceIcon[step.source] ?? Hash;
+          const status = complete || elapsed >= step.doneAt ? "done" : step === activeStep ? "active" : "pending";
+          const showSection = stepIndex === 0 || steps[stepIndex - 1]?.section !== step.section;
+          const visibleDetail =
+            status === "done"
+              ? step.detail
+              : status === "active"
+                ? `${capitalize(step.activeText)} connected ${step.label} data...`
+                : "Waiting for the previous investigation step";
+          return (
+            <React.Fragment key={`${step.source}-${step.detail}`}>
+              {showSection && <div className="trace-section">{step.section}</div>}
+              <div className={`trace-row ${status}`}>
+                <div className="trace-ico">
+                  <Icon className={`src-${step.source}`} />
+                </div>
+                <div className="trace-main">
+                  <div className="trace-source">{step.label}</div>
+                  <div className="trace-detail">{visibleDetail}</div>
+                </div>
+                <div className="trace-state">
+                  {status === "done" ? <span className="trace-check" /> : status === "active" ? <span className="trace-spinner" /> : null}
+                  {status === "done" ? step.doneText : status === "active" ? step.activeText : "queued"}
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function getThinkingLine({
+  activeStep,
+  retrievalDone,
+  showPlan,
+  showTrace,
+}: {
+  activeStep?: RetrievalStep;
+  retrievalDone: boolean;
+  showPlan: boolean;
+  showTrace: boolean;
+}): string {
+  if (!showPlan) {
+    return "Planning investigation...";
+  }
+  if (!showTrace) {
+    return "Deciding which sources to inspect and what proof is needed...";
+  }
+  if (retrievalDone) {
+    return "Synthesizing the final answer from grounded evidence...";
+  }
+  if (activeStep) {
+    return `${capitalize(activeStep.activeText)} ${activeStep.label}...`;
+  }
+  return "Grounding answer with citations...";
+}
+
+function getPlanStatus(steps: ThinkingPlanStep[], step: ThinkingPlanStep, index: number, elapsed: number): ThinkingPlanStatus {
+  if (elapsed >= step.doneAt) {
+    return "done";
+  }
+  const firstOpenIndex = steps.findIndex((candidateStep) => elapsed < candidateStep.doneAt);
+  return firstOpenIndex === index ? "running" : "queued";
+}
+
+function isMarketingTrace(query: string): boolean {
+  const normalizedQuery = query.toLowerCase();
+  return ["confused", "confusion", "public", "say publicly", "messaging", "copy", "launch post"].some((keyword) =>
+    normalizedQuery.includes(keyword),
+  );
+}
+
+function capitalize(value: string): string {
+  return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
+}
+
+async function waitForMinimumTrace(startedAt: number, minimumMs = MIN_AGENT_RUNTIME_MS): Promise<void> {
+  const remainingMs = minimumMs - (Date.now() - startedAt);
+  if (remainingMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remainingMs));
+  }
 }
 
 function buildFeedGroups(snapshot: HomeSnapshot | null): Record<"Suggested" | "Recent" | "Mentions", ActivityEvent[]> {
@@ -1134,6 +1666,57 @@ function fallbackTextAnswer(content: string): CueAssistantMessage {
   };
 }
 
+function findDemoReplayThread(question: string, threads: ChatThreadWithMessages[]): ChatThreadWithMessages | undefined {
+  const normalizedQuestion = question.toLowerCase();
+  if (
+    ["production", "breaking", "broken", "bug", "issue", "root cause", "impact", "owner", "slack ping"].some((keyword) =>
+      normalizedQuestion.includes(keyword),
+    ) &&
+    ["invite", "workspace", "h0", "aurora", "code", "pr #482"].some((keyword) => normalizedQuestion.includes(keyword))
+  ) {
+    return threads.find((thread) => thread.id === "thread_demo_h0_invite_blocker");
+  }
+  if (
+    ["invite", "accepting", "accepted", "workspace"].some((keyword) => normalizedQuestion.includes(keyword)) &&
+    ["h0", "blocking", "blocked", "block"].some((keyword) => normalizedQuestion.includes(keyword))
+  ) {
+    return threads.find((thread) => thread.id === "thread_demo_h0_invite_blocker");
+  }
+  if (
+    ["confused", "confusion", "public", "say publicly", "messaging", "copy", "launch post"].some((keyword) =>
+      normalizedQuestion.includes(keyword),
+    )
+  ) {
+    return threads.find((thread) => thread.id === "thread_demo_launch_confusion");
+  }
+  return undefined;
+}
+
+function isDemoReplayEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_CUE_DEMO_REPLAY === "true";
+}
+
+function sourceLabel(source: WorkspaceSource): string {
+  const labels: Record<WorkspaceSource, string> = {
+    cue: "Cue",
+    slack: "Slack",
+    github: "GitHub",
+    linear: "Linear",
+    notion: "Notion",
+    vercel: "Vercel",
+    exa: "Exa",
+    meet: "Meet",
+    posthog: "PostHog",
+    sentry: "Sentry",
+    atlassian: "Atlassian",
+    figma: "Figma",
+    miro: "Miro",
+    "google-workspace": "Google Workspace",
+    gitbook: "GitBook",
+  };
+  return labels[source];
+}
+
 function statusColor(status: "ok" | "warn" | "muted") {
   if (status === "ok") {
     return "var(--ok)";
@@ -1157,6 +1740,18 @@ function getPartOfDay() {
 
 function clip(question: string) {
   return question.length > 42 ? `${question.slice(0, 42)}...` : question;
+}
+
+function firstName(displayName: string) {
+  return displayName.split(/\s+/)[0] || displayName;
+}
+
+function initials(displayName: string) {
+  const parts = displayName
+    .replace(/@.*/, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  return (parts[0]?.[0] ?? "A") + (parts[1]?.[0] ?? "V");
 }
 
 function formatMeetingTime(isoString: string) {
@@ -1214,4 +1809,17 @@ async function patchJson<T>(url: string, body: Record<string, unknown>): Promise
     throw new Error(await response.text());
   }
   return response.json() as Promise<T>;
+}
+
+function executionToast(execution?: ApprovalExecution): string {
+  if (!execution) {
+    return "Approved - Cue is on it";
+  }
+  if (execution.status === "executed") {
+    return execution.message;
+  }
+  if (execution.status === "failed") {
+    return `Approved, but ${execution.message}`;
+  }
+  return `Approved - ${execution.message}`;
 }

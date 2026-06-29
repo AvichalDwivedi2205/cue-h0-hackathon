@@ -19,6 +19,7 @@ import type {
   WorkflowRunRecord,
   WorkspaceSummary,
 } from "@cue-h0/types";
+import { mergeConnectorSummaries } from "./connectorCatalog.js";
 import { createId, nowIsoString } from "./ids.js";
 import type {
   AppendChatExchangeInput,
@@ -100,7 +101,7 @@ export class PostgresCueRepository implements CueRepository {
 
     return {
       workspace,
-      connectors: connectors.map(mapConnector),
+      connectors: mergeConnectorSummaries(connectors.map(mapConnector)),
       meetings: meetingRows.map(mapMeeting),
       dueTasks: taskRows.map(mapTask),
       ticketsNeedingAttention: ticketRows.map(mapTicket),
@@ -318,6 +319,56 @@ export class PostgresCueRepository implements CueRepository {
             userDisplayName: seedData.workspace.userDisplayName,
           },
         });
+      const threadIds = seedData.chatThreads.map((thread) => thread.id);
+      const connectorIds = seedData.connectors.map((connector) => connector.id);
+      const citationIds = seedData.citations.map((citation) => citation.id);
+      const memoryIds = seedData.memoryRecords.map((memoryRecord) => memoryRecord.id);
+      const taskIds = seedData.tasks.map((task) => task.id);
+      const ticketIds = seedData.tickets.map((ticket) => ticket.id);
+      const meetingIds = seedData.meetings.map((meeting) => meeting.id);
+      const launchIds = seedData.launches.map((launch) => launch.id);
+      const launchCheckIds = seedData.launchChecks.map((launchCheck) => launchCheck.id);
+      const workflowRunIds = seedData.workflowRuns.map((workflowRun) => workflowRun.id);
+      const approvalIds = seedData.approvals.map((approval) => approval.id);
+      const activityEventIds = seedData.activityEvents.map((activityEvent) => activityEvent.id);
+
+      if (threadIds.length > 0) {
+        await transaction.delete(schema.chatMessages).where(inArray(schema.chatMessages.threadId, threadIds));
+        await transaction.delete(schema.chatThreads).where(inArray(schema.chatThreads.id, threadIds));
+      }
+      if (connectorIds.length > 0) {
+        await transaction.delete(schema.connectorAccounts).where(inArray(schema.connectorAccounts.id, connectorIds));
+      }
+      if (citationIds.length > 0) {
+        await transaction.delete(schema.citations).where(inArray(schema.citations.id, citationIds));
+      }
+      if (memoryIds.length > 0) {
+        await transaction.delete(schema.memoryRecords).where(inArray(schema.memoryRecords.id, memoryIds));
+      }
+      if (taskIds.length > 0) {
+        await transaction.delete(schema.tasks).where(inArray(schema.tasks.id, taskIds));
+      }
+      if (ticketIds.length > 0) {
+        await transaction.delete(schema.tickets).where(inArray(schema.tickets.id, ticketIds));
+      }
+      if (meetingIds.length > 0) {
+        await transaction.delete(schema.meetings).where(inArray(schema.meetings.id, meetingIds));
+      }
+      if (launchCheckIds.length > 0) {
+        await transaction.delete(schema.launchChecks).where(inArray(schema.launchChecks.id, launchCheckIds));
+      }
+      if (launchIds.length > 0) {
+        await transaction.delete(schema.launches).where(inArray(schema.launches.id, launchIds));
+      }
+      if (workflowRunIds.length > 0) {
+        await transaction.delete(schema.workflowRuns).where(inArray(schema.workflowRuns.id, workflowRunIds));
+      }
+      if (approvalIds.length > 0) {
+        await transaction.delete(schema.approvals).where(inArray(schema.approvals.id, approvalIds));
+      }
+      if (activityEventIds.length > 0) {
+        await transaction.delete(schema.activityEvents).where(inArray(schema.activityEvents.id, activityEventIds));
+      }
       await insertSeedRows(transaction, schema.connectorAccounts, seedData.connectors.map((connector) => ({ ...connector, workspaceId: seedData.workspace.id, createdAt: new Date() })));
       await insertSeedRows(transaction, schema.citations, seedData.citations.map((citation) => ({ ...citation, createdAt: new Date(citation.createdAt) })));
       await insertSeedRows(transaction, schema.memoryRecords, seedData.memoryRecords.map((memoryRecord) => ({ ...memoryRecord, createdAt: new Date(memoryRecord.createdAt) })));

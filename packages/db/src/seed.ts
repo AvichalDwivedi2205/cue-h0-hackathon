@@ -11,3 +11,4 @@ const repository = createPostgresCueRepository(databaseUrl);
 await repository.upsertSeedData(createDemoSeedData());
 
 console.log("Demo H0 workspace seeded.");
+process.exit(0);
