@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.9",
     "@cue-h0/db": "workspace:*",
     "@cue-h0/runtime": "workspace:*",
     "@cue-h0/types": "workspace:*",
